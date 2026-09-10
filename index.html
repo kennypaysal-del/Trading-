@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080b12">
+<title>Kenny Trading Terminal</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#080b12;color:#f4f6fb;
+ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.app{max-width:650px;margin:auto;padding:18px}
+.header{display:flex;justify-content:space-between;align-items:center;margin:10px 0 22px}
+.logo{font-size:22px;font-weight:800}
+.live{font-size:12px;background:#15251c;padding:7px 10px;border-radius:20px;color:#6cff9b}
+.card{
+ background:#111722;border:1px solid #202a39;border-radius:18px;
+ padding:17px;margin-bottom:14px;
+}
+.small{font-size:12px;color:#8e9bad}
+h1{font-size:30px;margin:6px 0}
+h2{font-size:16px;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{background:#0b1019;border-radius:13px;padding:13px}
+.metric b{display:block;font-size:18px;margin-top:5px}
+.green{color:#6cff9b}.red{color:#ff6b79}.orange{color:#ffbd66}
+.bias{
+ padding:15px;border-radius:14px;background:#0d1c15;
+ border:1px solid #214f35;margin-top:10px
+}
+.row{display:flex;justify-content:space-between;margin:11px 0}
+.bar{height:7px;background:#242d3a;border-radius:10px;overflow:hidden}
+.fill{height:100%;width:65%;background:#6cff9b}
+.event{
+ padding:12px 0;border-bottom:1px solid #222b38;
+ display:flex;justify-content:space-between
+}
+.check{padding:9px 0}
+button{
+ width:100%;border:0;border-radius:14px;padding:15px;
+ font-weight:700;font-size:15px;background:#e8edf6;color:#080b12
+}
+.footer{text-align:center;color:#697587;font-size:11px;margin:25px}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<div class="header">
+ <div class="logo">KT Terminal</div>
+ <div class="live">● TERMINAL V1</div>
+</div>
+
+<div class="card">
+ <div class="small">MARCHÉ PRINCIPAL</div>
+ <h1>EUR / USD</h1>
+ <div class="row"><span>Timeframe</span><b>H1</b></div>
+
+ <div class="bias">
+  <div class="small">BIAIS ACTUEL</div>
+  <h2 class="green">À ANALYSER</h2>
+  <div class="bar"><div class="fill"></div></div>
+  <p class="small">
+   Le terminal live sera connecté ensuite. Aucun faux prix n'est affiché.
+  </p>
+ </div>
+</div>
+
+<div class="grid">
+ <div class="metric"><span class="small">DXY</span><b>—</b><span class="small">Force dollar</span></div>
+ <div class="metric"><span class="small">US 10Y</span><b>—</b><span class="small">Taux US</span></div>
+ <div class="metric"><span class="small">VIX</span><b>—</b><span class="small">Risque</span></div>
+ <div class="metric"><span class="small">WTI</span><b>—</b><span class="small">Pétrole</span></div>
+</div>
+
+<div class="card" style="margin-top:14px">
+ <h2>🧠 Biais macro</h2>
+ <div class="row"><span>🇺🇸 Fed / Dollar</span><b>—</b></div>
+ <div class="row"><span>🇪🇺 BCE / Euro</span><b>—</b></div>
+ <div class="row"><span>📊 Surprise macro</span><b>—</b></div>
+ <p class="small">Objectif : déterminer le sens probable AVANT de chercher une entrée.</p>
+</div>
+
+<div class="card">
+ <h2>📅 Événements importants</h2>
+ <div class="event"><span>CPI 🇺🇸</span><b class="orange">HIGH</b></div>
+ <div class="event"><span>Fed 🇺🇸</span><b class="orange">HIGH</b></div>
+ <div class="event"><span>BCE 🇪🇺</span><b class="orange">HIGH</b></div>
+ <div class="event"><span>NFP 🇺🇸</span><b class="orange">HIGH</b></div>
+</div>
+
+<div class="card">
+ <h2>🎯 Avant de trader</h2>
+ <div class="check">☐ Biais macro clair</div>
+ <div class="check">☐ H4 / H1 cohérents</div>
+ <div class="check">☐ Niveau important identifié</div>
+ <div class="check">☐ Entrée M15 / M5 confirmée</div>
+ <div class="check">☐ Risque défini avant l'entrée</div>
+</div>
+
+<div class="card">
+ <h2>📓 Journal rapide</h2>
+ <p class="small">Note pourquoi tu prends le trade, pas seulement BUY ou SELL.</p>
+ <button onclick="journal()">+ Ajouter un trade</button>
+ <p id="note" class="small"></p>
+</div>
+
+<div class="footer">
+Kenny Trading Terminal • V1 • Paper trading
+</div>
+
+</div>
+
+<script>
+function journal(){
+ const t=prompt("Pourquoi prends-tu ce trade ?");
+ if(t){
+  localStorage.setItem("lastTrade",t);
+  document.getElementById("note").innerText="Dernière note : "+t;
+ }
+}
+const saved=localStorage.getItem("lastTrade");
+if(saved) document.getElementById("note").innerText="Dernière note : "+saved;
+</script>
+</body>
+</html>
