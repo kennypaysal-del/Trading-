@@ -1,0 +1,115 @@
+//@version=6
+indicator("BIG MOVE HUNTER X v1.0 | YM NQ ES", overlay = true, dynamic_requests = true)
+
+// Scanner experimental. Aucun ordre. Donnees du forfait TradingView (eventuellement differees).
+// Base: bougies H1, H4 et D deja cloturees. Aucune fuite de futur.
+showTable = input.bool(true, "Afficher radar")
+minScore = input.int(7, "Score entree minimum", minval = 5, maxval = 10)
+maxExtension = input.float(2.3, "Extension H1 maxi (ATR)", minval = 1, maxval = 5, step = 0.1)
+symYM = input.symbol("CBOT_MINI:YM1!", "Contrat YM continu")
+symNQ = input.symbol("CME_MINI:NQ1!", "Contrat NQ continu")
+symES = input.symbol("CME_MINI:ES1!", "Contrat ES continu")
+
+f_scan(string ticker) =>
+    // lookahead_on est utilise UNIQUEMENT avec des expressions decalees [1] ou [2].
+    [hc, hp, ho, hh, hl, hE20, hATR, hv, hvAvg, bHigh, bLow, low6, high6, hTime] = request.security(ticker, "60", [close[1], close[2], open[1], high[1], low[1], ta.ema(close, 20)[1], ta.atr(14)[1], volume[1], ta.sma(volume, 20)[1], ta.highest(high, 20)[2], ta.lowest(low, 20)[2], ta.lowest(low, 6)[1], ta.highest(high, 6)[1], time[1]], lookahead = barmerge.lookahead_on)
+    [fc, fE20, fE50, fHigh, fLow] = request.security(ticker, "240", [close[1], ta.ema(close, 20)[1], ta.ema(close, 50)[1], ta.highest(high, 30)[2], ta.lowest(low, 30)[2]], lookahead = barmerge.lookahead_on)
+    [dc, dE20, dHigh, dLow] = request.security(ticker, "1D", [close[1], ta.ema(close, 20)[1], ta.highest(high, 30)[2], ta.lowest(low, 30)[2]], lookahead = barmerge.lookahead_on)
+    bool valid = not na(hc) and not na(hATR) and hATR > 0 and not na(fE50) and not na(dE20) and not na(bHigh)
+    string direction = "—"
+    string setup = "—"
+    string statut = "DONNEES"
+    int score = 0
+    float stop = na
+    float objectif = na
+    float rr = na
+    if valid
+        int structL = (fc > fE20 ? 1 : 0) + (fE20 > fE50 ? 1 : 0) + (dc > dE20 ? 1 : 0)
+        int structS = (fc < fE20 ? 1 : 0) + (fE20 < fE50 ? 1 : 0) + (dc < dE20 ? 1 : 0)
+        float volumeRatio = hvAvg > 0 ? hv / hvAvg : 0
+        int participation = (volumeRatio >= 1.20 ? 1 : 0) + (math.abs(hc - ho) >= 0.55 * hATR ? 1 : 0)
+        // A: pullback; B: sortie de range; C: sweep et reintegration.
+        bool al = hl <= hE20 + 0.35 * hATR and hc > hE20 and hc > hp and fc > fE50
+        bool as = hh >= hE20 - 0.35 * hATR and hc < hE20 and hc < hp and fc < fE50
+        bool bl = hc > bHigh and (volumeRatio >= 1.2 or hc - ho >= 0.60 * hATR)
+        bool bs = hc < bLow and (volumeRatio >= 1.2 or ho - hc >= 0.60 * hATR)
+        bool cl = hl < bLow and hc > bLow and hc > ho and hc > hp
+        bool cs = hh > bHigh and hc < bHigh and hc < ho and hc < hp
+        string lSetup = bl ? "B" : al ? "A" : cl ? "C" : "—"
+        string sSetup = bs ? "B" : as ? "A" : cs ? "C" : "—"
+        bool earlyL = (math.abs(hc - hE20) <= 0.55 * hATR and structL >= 2) or (bHigh - hc >= 0 and bHigh - hc <= 0.55 * hATR)
+        bool earlyS = (math.abs(hc - hE20) <= 0.55 * hATR and structS >= 2) or (hc - bLow >= 0 and hc - bLow <= 0.55 * hATR)
+        float lStop = math.min(low6, hl) - 0.25 * hATR
+        float sStop = math.max(high6, hh) + 0.25 * hATR
+        float lRisk = hc - lStop
+        float sRisk = sStop - hc
+        float lObstacle1 = fHigh > hc ? fHigh - hc : 1e12
+        float lObstacle2 = dHigh > hc ? dHigh - hc : 1e12
+        float sObstacle1 = fLow < hc ? hc - fLow : 1e12
+        float sObstacle2 = dLow < hc ? hc - dLow : 1e12
+        float lRoom = math.min(lObstacle1, lObstacle2)
+        float sRoom = math.min(sObstacle1, sObstacle2)
+        float lRR = lRisk > 0 and lRoom < 1e12 ? lRoom / lRisk : na
+        float sRR = sRisk > 0 and sRoom < 1e12 ? sRoom / sRisk : na
+        int spaceL = na(lRR) ? 1 : lRR >= 3 ? 2 : lRR >= 2 ? 1 : 0
+        int spaceS = na(sRR) ? 1 : sRR >= 3 ? 2 : sRR >= 2 ? 1 : 0
+        int scoreL = math.min(10, structL + (lSetup != "—" ? 3 : earlyL ? 2 : 0) + participation + spaceL)
+        int scoreS = math.min(10, structS + (sSetup != "—" ? 3 : earlyS ? 2 : 0) + participation + spaceS)
+        bool chooseLong = scoreL > scoreS or (scoreL == scoreS and lSetup != "—" and sSetup == "—")
+        score := chooseLong ? scoreL : scoreS
+        direction := chooseLong ? "LONG" : "SHORT"
+        setup := chooseLong ? lSetup : sSetup
+        stop := chooseLong ? lStop : sStop
+        rr := chooseLong ? lRR : sRR
+        float riskPts = chooseLong ? lRisk : sRisk
+        objectif := chooseLong ? hc + riskPts * 3 : hc - riskPts * 3
+        bool tooExtended = math.abs(hc - hE20) > maxExtension * hATR
+        bool roomOK = na(rr) or rr >= 2
+        bool confirmed = setup != "—" and score >= minScore and roomOK and not tooExtended and riskPts > 0
+        statut := confirmed ? "ENTREE" : score >= 5 ? "SURV." : "ECARTER"
+        if setup != "—" and score >= minScore and not roomOK
+            statut := "OBSTACLE"
+        if setup != "—" and score >= minScore and tooExtended
+            statut := "ETENDU"
+    [direction, setup, score, statut, hc, stop, objectif, rr, hTime]
+
+[dy, sy, py, vy, cy, sly, ty, ry, timeY] = f_scan(symYM)
+[dn, sn, pn, vn, cn, sln, tn, rn, timeN] = f_scan(symNQ)
+[de, se, pe, ve, ce, sle, te, re, timeE] = f_scan(symES)
+
+color bg = color.rgb(7, 14, 24)
+color accent = color.rgb(32, 224, 218)
+color good = color.rgb(65, 220, 156)
+color bad = color.rgb(255, 104, 131)
+color amber = color.rgb(250, 190, 93)
+color muted = color.rgb(150, 169, 189)
+var table radar = table.new(position.top_right, 5, 4, bgcolor = bg, frame_color = color.rgb(48, 85, 101), frame_width = 1, border_width = 1, border_color = color.rgb(26, 48, 62))
+
+f_row(int row, string ticker, string dir, string strategy, int pts, string state) =>
+    color c = state == "ENTREE" ? good : state == "SURV." ? amber : muted
+    table.cell(radar, 0, row, ticker, text_color = accent, text_size = size.small)
+    table.cell(radar, 1, row, dir, text_color = dir == "LONG" ? good : dir == "SHORT" ? bad : muted, text_size = size.small)
+    table.cell(radar, 2, row, str.tostring(pts) + "/10", text_color = color.white, text_size = size.small)
+    table.cell(radar, 3, row, strategy, text_color = color.white, text_size = size.small)
+    table.cell(radar, 4, row, state, text_color = c, text_size = size.small)
+
+if barstate.islast and showTable
+    table.cell(radar, 0, 0, "BMHX", text_color = accent)
+    table.cell(radar, 1, 0, "SENS", text_color = muted)
+    table.cell(radar, 2, 0, "NOTE", text_color = muted)
+    table.cell(radar, 3, 0, "SETUP", text_color = muted)
+    table.cell(radar, 4, 0, "ACTION", text_color = muted)
+    f_row(1, "YM", dy, sy, py, vy)
+    f_row(2, "NQ", dn, sn, pn, vn)
+    f_row(3, "ES", de, se, pe, ve)
+
+// Alertes sur un changement H1 confirme; aucun ordre automatique.
+// Utiliser un graphique 15 minutes, puis "Any alert() function call".
+bool newHour = ta.change(time("60")) != 0
+if barstate.isconfirmed and newHour
+    if vy == "ENTREE"
+        alert("BMHX YM " + dy + " strategie " + sy + " score " + str.tostring(py) + "/10; entree indicative " + str.tostring(cy) + "; stop " + str.tostring(sly) + "; cible projetee " + str.tostring(ty), alert.freq_once_per_bar_close)
+    if vn == "ENTREE"
+        alert("BMHX NQ " + dn + " strategie " + sn + " score " + str.tostring(pn) + "/10; entree indicative " + str.tostring(cn) + "; stop " + str.tostring(sln) + "; cible projetee " + str.tostring(tn), alert.freq_once_per_bar_close)
+    if ve == "ENTREE"
+        alert("BMHX ES " + de + " strategie " + se + " score " + str.tostring(pe) + "/10; entree indicative " + str.tostring(ce) + "; stop " + str.tostring(sle) + "; cible projetee " + str.tostring(te), alert.freq_once_per_bar_close)
