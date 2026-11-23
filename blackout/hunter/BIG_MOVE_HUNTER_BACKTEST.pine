@@ -1,0 +1,71 @@
+//@version=6
+strategy("BIG MOVE HUNTER X v1.0 | BACKTEST H1", overlay=true, pyramiding=0, initial_capital=25000, default_qty_type=strategy.fixed, default_qty_value=1, commission_type=strategy.commission.cash_per_contract, commission_value=2, slippage=1, process_orders_on_close=true)
+// Backtest experimental. Executer exclusivement sur graphique 1 heure YM/NQ/ES, de preference contrats roules.
+// Le score ne represente PAS une probabilite. Tester frais, slippage, echeances et horaires.
+mode = input.string("A+B+C","Strategie(s)",options=["A+B+C","A+B","A","B","C"])
+threshold = input.int(7,"Seuil entree",minval=5,maxval=10)
+targetR = input.float(3.0,"Cible en R",minval=1.5,maxval=8.0,step=.5)
+maxExt = input.float(2.3,"Extension maxi H1 (ATR)",minval=1,maxval=5,step=.1)
+maxBars = input.int(60,"Sortie temps (barres H1)",minval=12,maxval=150)
+filterRoom = input.bool(true,"Veto obstacle a moins de 2R")
+volumeFactor = input.float(1.2,"Volume relatif fort",minval=1,maxval=2.5,step=.05)
+
+if timeframe.in_seconds() != 3600
+    runtime.error("Utiliser ce test sur un graphique 1 heure (H1).")
+
+[h4c,h4ema20,h4ema50,h4high,h4low] = request.security(syminfo.tickerid,"240",[close[1],ta.ema(close,20)[1],ta.ema(close,50)[1],ta.highest(high,30)[2],ta.lowest(low,30)[2]],lookahead=barmerge.lookahead_on)
+[dc,dema20,dhigh,dlow] = request.security(syminfo.tickerid,"1D",[close[1],ta.ema(close,20)[1],ta.highest(high,30)[2],ta.lowest(low,30)[2]],lookahead=barmerge.lookahead_on)
+
+hE20=ta.ema(close,20)
+a=ta.atr(14)
+relVol=ta.sma(volume,20)>0?volume/ta.sma(volume,20):0
+maxHigh=ta.highest(high,20)[1]
+minLow=ta.lowest(low,20)[1]
+low6=ta.lowest(low,6)
+high6=ta.highest(high,6)
+bool enough=not na(h4ema50) and not na(dema20) and not na(maxHigh) and not na(a) and a>0
+bool al=enough and low<=hE20+.35*a and close>hE20 and close>close[1] and h4c>h4ema50
+bool as_=enough and high>=hE20-.35*a and close<hE20 and close<close[1] and h4c<h4ema50
+bool bl=enough and close>maxHigh and (relVol>=1.2 or close-open>=.60*a)
+bool bs=enough and close<minLow and (relVol>=1.2 or open-close>=.60*a)
+bool cl=enough and low<minLow and close>minLow and close>open and close>close[1]
+bool cs=enough and high>maxHigh and close<maxHigh and close<open and close<close[1]
+string setupL=bl?"B":al?"A":cl?"C":"—"
+string setupS=bs?"B":as_?"A":cs?"C":"—"
+bool allowedL=mode=="A+B+C" or (mode=="A+B" and setupL!="C") or mode==setupL
+bool allowedS=mode=="A+B+C" or (mode=="A+B" and setupS!="C") or mode==setupS
+int stL=(h4c>h4ema20?1:0)+(h4ema20>h4ema50?1:0)+(dc>dema20?1:0)
+int stS=(h4c<h4ema20?1:0)+(h4ema20<h4ema50?1:0)+(dc<dema20?1:0)
+int revL=setupL=="C"?(close>hE20?2:1):stL
+int revS=setupS=="C"?(close<hE20?2:1):stS
+int part=(relVol>=volumeFactor?1:0)+(math.abs(close-open)>=.55*a?1:0)
+float riskL=close-(low6-.25*a)
+float riskS=(high6+.25*a)-close
+float rHi=math.min(h4high>close?h4high-close:1e12,dhigh>close?dhigh-close:1e12)
+float rLo=math.min(h4low<close?close-h4low:1e12,dlow<close?close-dlow:1e12)
+float roomL=riskL>0 and rHi<1e12?rHi/riskL:na
+float roomS=riskS>0 and rLo<1e12?rLo/riskS:na
+int pointsL=na(roomL)?1:roomL>=3?2:roomL>=2?1:0
+int pointsS=na(roomS)?1:roomS>=3?2:roomS>=2?1:0
+int scoreL=math.min(10,revL+(setupL!="—"?3:0)+part+pointsL)
+int scoreS=math.min(10,revS+(setupS!="—"?3:0)+part+pointsS)
+bool ext=math.abs(close-hE20)>maxExt*a
+bool okL=enough and allowedL and setupL!="—" and scoreL>=threshold and riskL>0 and not ext and (not filterRoom or na(roomL) or roomL>=2) and (setupL!="C" or close>hE20)
+bool okS=enough and allowedS and setupS!="—" and scoreS>=threshold and riskS>0 and not ext and (not filterRoom or na(roomS) or roomS>=2) and (setupS!="C" or close<hE20)
+
+var int entryBar=na
+if barstate.isconfirmed and strategy.position_size==0
+    if okL and (not okS or scoreL>scoreS)
+        strategy.entry("LONG",strategy.long,comment=setupL+" "+str.tostring(scoreL)+"/10")
+        strategy.exit("LONG EXIT","LONG",stop=low6-.25*a,limit=close+riskL*targetR)
+        entryBar:=bar_index
+    else if okS and (not okL or scoreS>scoreL)
+        strategy.entry("SHORT",strategy.short,comment=setupS+" "+str.tostring(scoreS)+"/10")
+        strategy.exit("SHORT EXIT","SHORT",stop=high6+.25*a,limit=close-riskS*targetR)
+        entryBar:=bar_index
+if strategy.position_size!=0 and not na(entryBar) and bar_index-entryBar>=maxBars
+    strategy.close_all(comment="TEMPS")
+
+plot(hE20,"EMA20 H1",color=color.new(color.aqua,20))
+plotshape(okL and strategy.position_size==0,title="Setup LONG",location=location.belowbar,style=shape.triangleup,color=color.new(color.lime,0),size=size.tiny)
+plotshape(okS and strategy.position_size==0,title="Setup SHORT",location=location.abovebar,style=shape.triangledown,color=color.new(color.red,0),size=size.tiny)
