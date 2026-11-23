@@ -53,11 +53,14 @@ f_scan(string ticker) =>
         float sRR = sRisk > 0 and sRoom < 1e12 ? sRoom / sRisk : na
         int spaceL = na(lRR) ? 1 : lRR >= 3 ? 2 : lRR >= 2 ? 1 : 0
         int spaceS = na(sRR) ? 1 : sRR >= 3 ? 2 : sRR >= 2 ? 1 : 0
-        int scoreL = math.min(10, structL + (lSetup != "—" ? 3 : earlyL ? 2 : 0) + participation + spaceL)
-        int scoreS = math.min(10, structS + (sSetup != "—" ? 3 : earlyS ? 2 : 0) + participation + spaceS)
+        // C est juge sur son changement H1: Daily peut encore etre oppose.
+        int revL = lSetup == "C" ? (hc > hE20 ? 2 : 1) : structL
+        int revS = sSetup == "C" ? (hc < hE20 ? 2 : 1) : structS
+        int scoreL = math.min(10, revL + (lSetup != "—" ? 3 : earlyL ? 2 : 0) + participation + spaceL)
+        int scoreS = math.min(10, revS + (sSetup != "—" ? 3 : earlyS ? 2 : 0) + participation + spaceS)
         bool chooseLong = scoreL > scoreS or (scoreL == scoreS and lSetup != "—" and sSetup == "—")
         score := chooseLong ? scoreL : scoreS
-        direction := chooseLong ? "LONG" : "SHORT"
+        direction := scoreL == scoreS and lSetup == "—" and sSetup == "—" ? "MIXTE" : chooseLong ? "LONG" : "SHORT"
         setup := chooseLong ? lSetup : sSetup
         stop := chooseLong ? lStop : sStop
         rr := chooseLong ? lRR : sRR
@@ -106,10 +109,16 @@ if barstate.islast and showTable
 // Alertes sur un changement H1 confirme; aucun ordre automatique.
 // Utiliser un graphique 15 minutes, puis "Any alert() function call".
 bool newHour = ta.change(time("60")) != 0
+var int lastYMAlert = na
+var int lastNQAlert = na
+var int lastESAlert = na
 if barstate.isconfirmed and newHour
-    if vy == "ENTREE"
+    if vy == "ENTREE" and (na(lastYMAlert) or timeY != lastYMAlert)
+        lastYMAlert := timeY
         alert("BMHX YM " + dy + " strategie " + sy + " score " + str.tostring(py) + "/10; entree indicative " + str.tostring(cy) + "; stop " + str.tostring(sly) + "; cible projetee " + str.tostring(ty), alert.freq_once_per_bar_close)
-    if vn == "ENTREE"
+    if vn == "ENTREE" and (na(lastNQAlert) or timeN != lastNQAlert)
+        lastNQAlert := timeN
         alert("BMHX NQ " + dn + " strategie " + sn + " score " + str.tostring(pn) + "/10; entree indicative " + str.tostring(cn) + "; stop " + str.tostring(sln) + "; cible projetee " + str.tostring(tn), alert.freq_once_per_bar_close)
-    if ve == "ENTREE"
+    if ve == "ENTREE" and (na(lastESAlert) or timeE != lastESAlert)
+        lastESAlert := timeE
         alert("BMHX ES " + de + " strategie " + se + " score " + str.tostring(pe) + "/10; entree indicative " + str.tostring(ce) + "; stop " + str.tostring(sle) + "; cible projetee " + str.tostring(te), alert.freq_once_per_bar_close)
