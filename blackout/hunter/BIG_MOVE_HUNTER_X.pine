@@ -68,7 +68,9 @@ f_scan(string ticker) =>
         objectif := chooseLong ? hc + riskPts * 3 : hc - riskPts * 3
         bool tooExtended = math.abs(hc - hE20) > maxExtension * hATR
         bool roomOK = na(rr) or rr >= 2
-        bool confirmed = setup != "—" and score >= minScore and roomOK and not tooExtended and riskPts > 0
+        // Un sweep C n'est qu'une alerte sans reprise de l'EMA20 H1.
+        bool reversalConfirmed = setup != "C" or (chooseLong ? hc > hE20 : hc < hE20)
+        bool confirmed = setup != "—" and score >= minScore and roomOK and not tooExtended and riskPts > 0 and reversalConfirmed
         statut := confirmed ? "ENTREE" : score >= 5 ? "SURV." : "ECARTER"
         if setup != "—" and score >= minScore and not roomOK
             statut := "OBSTACLE"
